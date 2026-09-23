@@ -72,4 +72,23 @@ export function ListingList({ city }) {
 | **Pas d'idempotence** : chaque réessai du prestataire jusqu'à 5 renvoie l'email et renotifie le CRM. | Élevée | Table `processed_webhook_events` avec `event_id` en clé primaire `ON CONFLICT DO NOTHING`, transition autorisée uniquement depuis `pending`. |
 | **Pas de gestion d'erreur ni de transaction** : si l'email ou le CRM échoue, le handler rejette sans répondre, le prestataire réessaie, et l'étape qui avait réussi est refaite (paiement mis à jour, email parfois envoyé deux fois). | Élevée | Mise à jour + événement + outbox dans une seule transaction ; en cas d'erreur, `ROLLBACK` et `500` volontaire pour obtenir un réessai propre. |
 
----
+## Partie 3
+
+### Scénario
+
+Pour les 2 premières minutes, je repondrai au client : "Laissez-moi vérifier et je vous rappelle tout de suite"
+Une fois l'appel coupé, je vais commencer analyser l'alerte sur le créneau 21h30-21h40 : l'idée est de croiser les logs pour identifier le moment précis où le serveur a subi un pic et où le taux d'erreur a grimpé de 0,1 % à 35 % ainsi que la possibilité de savoir quel api a été la cause. 
+Si l'extrait B est en production, mon hypothèse principale est une surcharge de requêtes ce qui a causé le pic et le temps de réponse lente.
+Pour sécuriser la situation, je passe le site en mode maintenance, puis je recontacte le client pour lui conseiller de mettre en pause la campagne. Une fois la situation stabilisée, je procéderai au débogage et je renforcerai les tests pour la stabilité et la performance du site et éviter ce genre d'incident.
+
+### Avant le lancement 
+
+Les outils d'alerte que je mettrai en place avant la mise en production : 
+
+`Taux d'erreur HTTP (5xx) :` Déclenchement dès que > 1 % des requêtes échouent sur une fenêtre de 5 min - **Datadog**.
+
+`Temps de réponse (Latence p95) :` Déclenchement si le p95 dépasse 800 ms pendant plus de 3 min - **Sentry**.
+
+`Consommation CPU / Mémoire serveur :` Déclenchement si l'usage CPU ou RAM dépasse 85 % pendant > 5 min - **Prometheus + Grafana**.
+
+`Saturation de la base de données :` Déclenchement si le pool de connexions atteint 80 % ou si la file d'attente explose - **AWS CloudWatch**.
